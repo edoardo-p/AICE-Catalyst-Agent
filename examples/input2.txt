@@ -1,0 +1,1 @@
+We want to add an AI assistant to our existing CRM that helps sales reps write follow-up emails based on client data. It should integrate with OpenAI API and respect company branding.

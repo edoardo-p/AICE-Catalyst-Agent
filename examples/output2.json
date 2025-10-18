@@ -1,0 +1,46 @@
+{
+  "project_name": "CRM AI Email Assistant",
+  "objective": "Integrate AI to help sales reps draft client follow-up emails that match company branding.",
+  "phases": [
+    {
+      "name": "Requirements & Design",
+      "deliverables": [
+        "Analyze existing CRM architecture",
+        "Identify API integration points",
+        "Define tone/style rules for AI-generated text"
+      ]
+    },
+    {
+      "name": "Integration & Prompt Design",
+      "tasks": [
+        "Connect CRM backend to OpenAI API",
+        "Engineer prompts using customer data",
+        "Add fallback logic for API errors or inappropriate output"
+      ],
+      "acceptance_criteria": ["AI generates coherent and relevant draft emails"]
+    },
+    {
+      "name": "Frontend & UX",
+      "tasks": [
+        "Add 'Generate Email' button to CRM email editor",
+        "Show editable AI draft preview",
+        "Track user edits for quality improvement"
+      ],
+      "acceptance_criteria": [
+        "Users can easily preview and edit AI-generated drafts"
+      ]
+    },
+    {
+      "name": "Testing & Governance",
+      "tasks": [
+        "Validate tone and brand compliance",
+        "Run user acceptance testing with sales team",
+        "Deploy feature with usage analytics tracking"
+      ],
+      "acceptance_criteria": [
+        "Approved by compliance team",
+        "Feature performs reliably in production"
+      ]
+    }
+  ]
+}

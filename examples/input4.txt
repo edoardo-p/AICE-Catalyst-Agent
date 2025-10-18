@@ -1,0 +1,1 @@
+You will build an AI agent that transforms raw business requirements into a structured, phased development plan. This agent will help developers and code assistants (like GitHub Copilot or Claude) execute projects more efficiently by breaking down business requirements into actionable tasks.

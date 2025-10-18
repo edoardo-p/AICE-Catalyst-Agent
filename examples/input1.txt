@@ -1,0 +1,1 @@
+We want to build a simple web app for freelancers to track billable hours and generate invoices. Users should be able to sign up, log time entries, and download invoices as PDFs. We’d like to release an MVP in 6 weeks.

@@ -1,0 +1,1 @@
+We need a platform to manage inventory across multiple warehouses, with forecasting, supplier integration, and a dashboard for executives.

@@ -1,19 +1,10 @@
-import os
-
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import (
-    AIMessage,
-    HumanMessage,
-    RemoveMessage,
-    SystemMessage,
-)
 from langchain_openai import AzureChatOpenAI
-from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph.state import CompiledStateGraph, StateGraph
 
-from structures import CatalystState
-from tools import parse_requirements
+from structures import ProjectPlan
+from tools import estimate_task_complexity, generate_tasks, parse_requirements
 
 load_dotenv()
 
@@ -25,13 +16,14 @@ def main():
         temperature=0.0,
     )
 
-    agent = create_agent(
+    catalyst_agent = create_agent(
         model=main_model,
-        tools=[parse_requirements],
+        tools=[parse_requirements, generate_tasks, estimate_task_complexity],
         system_prompt="You are an expert agent capable of generating a "
         "structured project plan from raw business requirements. "
+        "Use the tools provided to you to fill in missing portions of the state."
         "Answer purely with JSON.",
-        state_schema=CatalystState,
+        state_schema=PlannerState,
     )
 
     with open("examples/1/input1.txt") as f:

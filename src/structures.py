@@ -1,4 +1,4 @@
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Literal, TypeVar
 
 from langchain.agents.middleware import AgentState
 from pydantic import BaseModel, Field
@@ -6,22 +6,14 @@ from pydantic import BaseModel, Field
 T = TypeVar("T")
 
 
-def reduce_list(left: list[T] | None, right: list[T] | None) -> list[T]:
-    """Safely combine two lists, handling cases where either or both inputs might be None.
-
-    Args:
-        left (list | None): The first list to combine, or None.
-        right (list | None): The second list to combine, or None.
-
-    Returns:
-        list: A new list containing all elements from both input lists.
-               If an input is None, it's treated as an empty list.
-    """
+def reduce_dict(left: dict[str, T] | None, right: dict[str, T] | None) -> dict[str, T]:
+    """Safely combine two dicts, handling cases where either or both inputs might be None.
+    In case of key overlap, values in the right dict will overwrite those in the left one."""
     if not left:
-        left = []
+        left = {}
     if not right:
-        right = []
-    return left + right
+        right = {}
+    return left | right
 
 
 class Task(BaseModel):
@@ -35,6 +27,9 @@ class Task(BaseModel):
         description="A short explanation of what the task entails, including context and purpose."
     )
 
+    def __str__(self) -> str:
+        return f"{self.name} (ID {self.task_id}): {self.description}"
+
 
 class Feature(BaseModel):
     feature_id: str = Field(
@@ -46,14 +41,18 @@ class Feature(BaseModel):
     description: str = Field(
         description="A short description of the feature inferred from the requirements."
     )
+    phase: str | None = Field(
+        default=None,
+        description="Optional phase name this feature list belongs to (e.g., Discovery, Core Functionality).",
+    )
+
+    def __str__(self) -> str:
+        return f"{self.name} (ID {self.feature_id}): {self.description}"
 
 
 class Tasks(BaseModel):
     """List of Task objects, grouped by feature_id"""
 
-    feature_id: str = Field(
-        description="The feature_id this group of tasks belongs to (unique)."
-    )
     tasks: list[Task] = Field(
         default_factory=list,
         description="List of Task objects associated with the feature_id.",
@@ -63,20 +62,15 @@ class Tasks(BaseModel):
 class Features(BaseModel):
     """List of Feature objects"""
 
-    phase: str | None = Field(
-        default=None,
-        description="Optional phase name this feature list belongs to (e.g., Discovery, Core Functionality).",
-    )
-    data: list[Feature] = Field(
+    features: list[Feature] = Field(
         default_factory=list,
         description="List of `Feature` objects inferred from requirements.",
     )
 
 
 class ComplexityEstimate(BaseModel):
-    feature_id: str = Field(description="The feature_id this estimate refers to.")
-    complexity_label: str = Field(
-        description="Human-readable label for complexity (e.g., Simple, Medium, Complex)."
+    complexity_label: Literal["Simple", "Medium", "Complex", "Very Complex"] = Field(
+        description="Human-readable label for complexity"
     )
     estimated_days: int = Field(
         description="Estimated number of working days to implement the feature."
@@ -96,35 +90,55 @@ class ComplexityEstimate(BaseModel):
     )
 
 
+class Scenario(BaseModel):
+    """BDD-style scenario using Given/When/Then syntax."""
+
+    given: str = Field(description="Initial context or precondition.")
+    when: str = Field(description="Action or event that triggers the behavior.")
+    then: str = Field(description="Expected outcome or result.")
+
+
+class UnitTest(BaseModel):
+    """Definition of a single unit test."""
+
+    test_name: str = Field(description="Name of the unit test.")
+    what_it_tests: str = Field(
+        description="What functionality or logic the test verifies."
+    )
+    expected_behavior: str = Field(
+        description="Expected outcome of the test when it passes."
+    )
+
+
+class IntegrationTest(BaseModel):
+    """Definition of a single integration test."""
+
+    test_name: str = Field(description="Name of the integration test.")
+    components: list[str] = Field(
+        description="List of system components or modules involved in the test."
+    )
+    what_it_tests: str = Field(
+        description="What the test verifies at the system integration level."
+    )
+    expected_behavior: str = Field(
+        description="Expected system behavior under integration conditions."
+    )
+
+
 class AcceptanceCriteria(BaseModel):
-    """Structured acceptance criteria for a single task."""
+    """Structured acceptance criteria for a single task or feature."""
 
-    task_id: str = Field(
-        description="The unique id of the task these acceptance criteria apply to."
-    )
-    scenarios: list[dict[str, str]] = Field(
-        default_factory=list,
-        description="BDD-style scenarios with keys like given/when/then",
-    )
-    unit_tests: list[dict[str, str]] = Field(
-        default_factory=list,
-        description="Unit test definitions: {test_name, what_it_tests, expected_behavior}",
-    )
-    integration_tests: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Integration test definitions: {test_name, components, what_it_tests, expected_behavior}",
-    )
-    edge_cases: list[str] = Field(
-        default_factory=list, description="Notable edge cases to validate against"
+    scenarios: list[Scenario] = Field(
+        description="BDD-style Given/When/Then scenarios describing expected behavior.",
     )
 
-
-class TaskPrompt(BaseModel):
-    task_id: str = Field(
-        description="The unique id of the task this prompt was generated for."
+    unit_tests: list[UnitTest] = Field(
+        description="Suite of unit tests covering individual components or functions.",
     )
-    prompt: str = Field(
-        description="The generated prompt string intended for an AI assistant."
+
+    integration_tests: list[IntegrationTest] | None = Field(
+        default=None,
+        description="Suite of integration tests validating multi-component behavior.",
     )
 
 
@@ -139,22 +153,12 @@ class TaskPrompt(BaseModel):
 class ProjectPlanState(AgentState):
     raw_requirements: str
 
-    # Populated by parse_requirements_tool
     features: Features
     # constraints: list[str]
     # stakeholders: list[str]
 
-    # Populated by generate_tasks_tool (per feature)
-    tasks_by_feature: Annotated[list[Tasks], reduce_list]
-
-    # Populated by estimate_complexity_tool (per feature)
-    complexity_by_feature: Annotated[list[ComplexityEstimate], reduce_list]
-
-    # Populated by create_acceptance_criteria_tool (per task)
-    criteria_by_task: Annotated[list[AcceptanceCriteria], reduce_list]
-
-    # # Populated by generate_prompt_for_copilot_tool (per task)
-    prompts_by_task: Annotated[list[TaskPrompt], reduce_list]
-
-    # Populated by detect_dependencies_tool
+    tasks_by_feature: Annotated[dict[str, Tasks], reduce_dict]
+    complexity_by_feature: Annotated[dict[str, ComplexityEstimate], reduce_dict]
+    criteria_by_task: Annotated[dict[str, AcceptanceCriteria], reduce_dict]
+    prompts_by_task: Annotated[dict[str, str], reduce_dict]
     # dependency_graph: DependencyGraph

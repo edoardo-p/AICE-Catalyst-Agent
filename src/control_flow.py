@@ -10,47 +10,64 @@ def add_user_input_to_state(state: ProjectPlanState) -> dict[str, Any]:
 
 
 def should_continue(state: ProjectPlanState) -> bool:
-    # # 1) Must have features parsed
-    # if not state["features"]:
-    #     return False
+    features = state.get("features")
+    tasks = state.get("tasks_by_feature", {})
 
-    # # 2) All features must have complexity estimates
-    # for f in state.features:
-    #     if f.id not in state.complexity_by_feature:
-    #         return False
+    if not features:
+        return True
 
-    # # 3) Must have tasks
-    # if not state.tasks:
-    #     return False
+    for feature in features.features:
+        if (
+            not feature.phase
+            or feature.feature_id not in tasks
+            or feature.feature_id not in state.get("complexity_by_feature", {})
+        ):
+            return True
 
-    # # 4) All tasks must have acceptance criteria and prompts
-    # task_ids = [t.task_id for t in state.tasks]
-    # if any(tid not in state.criteria_by_task for tid in task_ids):
-    #     return False
-    # if any(tid not in state.prompts_by_task for tid in task_ids):
-    #     return False
+    for task_id in tasks:
+        if task_id not in state.get("criteria_by_task", {}) or task_id not in state.get(
+            "prompts_by_task", {}
+        ):
+            return True
 
-    # # 5) Dependency graph must be present
     # if not state.dependency_graph:
-    #     return False
+    #     return True
 
-    # return True
-
-    return state.get("features") is None or state.get("tasks_by_feature") is None
+    return False
 
 
 def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
     features = state.get("features")
-    tasks_by_features = state.get("tasks_by_feature")
-
-    tasks_dict = {
-        tasks.feature_id: [task.model_dump() for task in tasks.tasks]
-        for tasks in tasks_by_features
-    }
+    tasks = state.get("tasks_by_feature", {})
 
     out_object = {
-        feature.name: tasks_dict.get(feature.feature_id, [])
-        for feature in features.data
+        feature.name: tasks.get(feature.feature_id, []) for feature in features.features
     }
 
     return {"messages": [("ai", json.dumps(out_object))]}
+
+
+# def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
+#     features = state.get("features")
+#     features_by_phase = defaultdict(list)
+#     for feature in features.features:
+#         features_by_phase[feature.phase].append(feature)
+#     tasks_by_features = state.get("tasks_by_feature")
+
+#     tasks_dict = {
+#         task.task_id: task for tasks in tasks_by_features for task in tasks.tasks
+#     }
+
+#     tasks_obj = [
+#         {
+#             **task.model_dump(exclude={"task_id"}),
+#         }
+#         for task_id, task in tasks_dict.items()
+#     ]
+
+#     out_object = {
+#         feature.name: tasks_dict.get(feature.feature_id, [])
+#         for feature in features.features
+#     }
+
+#     return {"messages": [("ai", json.dumps(out_object))]}

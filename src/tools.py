@@ -6,7 +6,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import AzureChatOpenAI
 from langgraph.types import Command
 
-from structures import ComplexityEstimate, Feature, Features, Tasks
+from structures import (
+    AcceptanceCriteria,
+    ComplexityEstimate,
+    Feature,
+    Features,
+    Task,
+    Tasks,
+)
 
 
 @tool
@@ -50,12 +57,19 @@ def parse_requirements(
         ]
     )
 
-    output = (prompt | llm.with_structured_output(Features)).invoke({})
+    features: Features = (prompt | llm.with_structured_output(Features)).invoke({})
+    for i, feature in enumerate(features.features):
+        feature.feature_id = str(i)
 
     return Command(
         update={
-            "features": output,
-            "messages": [ToolMessage(f"{output}", tool_call_id=tool_call_id)],
+            "features": features,
+            "messages": [
+                ToolMessage(
+                    f"Generated the following features:\n{features}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
         }
     )
 
@@ -94,68 +108,56 @@ def generate_tasks(
             (
                 "system",
                 "You are an expert agent capable of breaking down a feature description into a list of tasks."
-                "Break the feature down into tasks, and reference the feature id",
+                "Generate a list of tasks for the feature provided by the user.",
             ),
-            (
-                "human",
-                f"{feature.name} (ID {feature.feature_id}): {feature.description}",
-            ),
+            ("human", str(feature)),
         ]
     )
 
-    output = (prompt | llm.with_structured_output(Tasks)).invoke({})
+    tasks: Tasks = (prompt | llm.with_structured_output(Tasks)).invoke({})
+    for i, task in enumerate(tasks.tasks):
+        task.task_id = f"{feature.feature_id}-{i}"
 
     return Command(
         update={
-            "tasks_by_feature": [output],
-            "messages": [ToolMessage(f"{output}", tool_call_id=tool_call_id)],
+            "tasks_by_feature": {feature.feature_id: tasks},
+            "messages": [
+                ToolMessage(
+                    f"Generated the following tasks:\n{tasks}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
         }
     )
 
 
 @tool
-def estimate_task_complexity(
-    feature_description: str, tool_call_id: Annotated[str, InjectedToolCallId]
+def estimate_feature_complexity(
+    feature: Feature, tasks: Tasks, tool_call_id: Annotated[str, InjectedToolCallId]
 ) -> Command:
     """
-    Estimate the development complexity of a proposed feature using an LLM-based software
-    architecture analysis model.
+    Estimate the implementation complexity of a feature based on its associated tasks.
 
-    This function evaluates a feature description and returns a structured
-    `ComplexityEstimate` object containing the projected effort, risk factors,
-    and rationale. The analysis considers multiple dimensions of technical work,
-    including algorithmic difficulty, integration points, testing scope, and unknowns.
+    This tool analyzes a given `Feature` and its related `Tasks` to determine the overall
+    complexity level required for implementation. The estimation considers technical,
+    architectural, and organizational factors, including integration requirements,
+    unknowns, and testing effort.
 
-    The LLM is instructed to classify tasks into one of four levels:
-        - **Simple**: 1-3 days — straightforward implementation
-        - **Medium**: 4-7 days — moderate complexity or integration
-        - **Complex**: 8-15 days — significant complexity or multiple integrations
-        - **Very Complex**: 16+ days — extensive research or high uncertainty
+    The tool uses a language model to classify complexity into one of several categories
+    (Simple, Medium, Complex, or Very Complex), with corresponding estimated time ranges.
 
-    Args:
-        feature_description (str):
-            A natural-language description of the feature or enhancement to assess.
-            Example: "Implement real-time collaborative editing with conflict resolution."
+    Parameters
+    ----------
+    feature : Feature
+        The feature to be analyzed for implementation complexity.
+    tasks : Tasks
+        The collection of tasks associated with the feature. These provide context for
+        understanding scope, dependencies, and effort.
 
-    Returns:
-        ComplexityEstimate:
-            A structured object with the following fields:
-              - **complexity_label (str)**: One of "Simple", "Medium", "Complex", or "Very Complex"
-              - **estimated_days (int)**: Approximate number of development days required
-              - **risks (list[str])**: Identified risks, dependencies, or unknowns
-              - **confidence_level (float)**: Confidence in the estimation (0.0-1.0)
-              - **reasoning (str)**: Concise justification for the assigned complexity rating
-
-    Example:
-        >>> result = estimate_task_complexity(
-        ...     "Add AI-based image tagging with object detection and cloud storage integration"
-        ... )
-        >>> print(result.complexity_label)
-        "Complex"
-        >>> print(result.estimated_days)
-        12
-        >>> print(result.risks)
-        ["Cloud API rate limits", "Model accuracy tuning", "Performance optimization"]
+    Returns
+    -------
+    complexity_by_feature : ComplexityEstimate
+        An object containing the structured complexity estimation for the given feature.
     """
     llm = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
@@ -169,6 +171,7 @@ def estimate_task_complexity(
                 """You are an expert software architect specializing in complexity estimation. 
 Analyze features thoroughly considering technical complexity, dependencies, and unknowns. 
 Consider:
+- The complexity of the task breakdown
 - Technical complexity (algorithms, data structures, architecture)
 - Integration points and dependencies
 - Unknown factors and research needed
@@ -177,14 +180,208 @@ Consider:
 Simple: 1-3 days, straightforward implementation
 Medium: 4-7 days, moderate complexity or integration
 Complex: 8-15 days, significant complexity or multiple integrations
-Very Complex: 16+ days, high complexity, research, or many unknowns
-Always respond with valid JSON only.""",
+Very Complex: 16+ days, high complexity, research, or many unknowns.""",
             ),
             (
                 "human",
-                f"""Estimate the complexity of implementing the following feature:\nFeature: {feature_description}""",
+                f"Feature: {feature}\nTasks:\n{'\n'.join(str(task) for task in tasks.tasks)}",
             ),
         ]
     )
 
-    return (prompt | llm.with_structured_output(ComplexityEstimate)).invoke({})
+    output = (prompt | llm.with_structured_output(ComplexityEstimate)).invoke({})
+
+    return Command(
+        update={
+            "complexity_by_feature": {feature.feature_id: output},
+            "messages": [
+                ToolMessage(
+                    f"Calculated complexities:\n{output}", tool_call_id=tool_call_id
+                )
+            ],
+        }
+    )
+
+
+def classify_features_into_phase(
+    features: Features, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
+    """
+    Break down one or more software features into concrete implementation tasks.
+
+    This tool modifies the `Features` object passed as input by assigning a
+    concise and effective phase name to each feature in the list.
+
+    Parameters
+    ----------
+    features : Features
+        A list of features that need to be sorted into distinct phases.
+
+    Returns
+    -------
+    features : Features
+        The same list of features with phase fields populated correctly.
+    """
+    llm = AzureChatOpenAI(
+        azure_deployment="gpt-4o-mini",
+        api_version="2025-01-01-preview",
+        temperature=0.2,
+    )
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an expert agent capable of grouping feature descriptions into phases."
+                "Do not alter the names or descriptions of features, simply modify the phase appropriately.",
+            ),
+            ("human", "\n".join(str(feature) for feature in features.features)),
+        ]
+    )
+
+    new_features = (prompt | llm.with_structured_output(Features)).invoke({})
+
+    return Command(
+        update={
+            "features": new_features,
+            "messages": [
+                ToolMessage(
+                    f"Updated feature phases:\n{new_features}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
+        }
+    )
+
+
+@tool
+def create_task_acceptance_criteria(
+    task: Task, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
+    """
+    Generate clear and testable acceptance criteria for a given software development task.
+
+    This tool takes a single `Task` object and produces a structured list of acceptance
+    criteria that describe the expected outcomes and completion conditions for that task.
+    Acceptance criteria are expressed as concise, verifiable statements that can be used
+    for validation, QA, and user acceptance testing.
+
+    The tool uses a language model to analyze the task's name and description, and
+    infer measurable success conditions based on functional intent, edge cases,
+    and quality requirements.
+
+    Parameters
+    ----------
+    task : Task
+        The task for which to generate acceptance criteria. Should include a clear name
+        and description outlining the purpose and scope of the work.
+
+    Returns
+    -------
+    acceptance_criteria : AcceptanceCriteria
+        A structured list of acceptance criteria generated for the given task.
+    """
+    llm = AzureChatOpenAI(
+        azure_deployment="gpt-4o-mini",
+        api_version="2025-01-01-preview",
+        temperature=0.3,
+    )
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a senior software engineer responsible for defining clear, "
+                "verifiable acceptance criteria for development tasks. Each criterion "
+                "should describe an observable condition that determines when the task "
+                "can be considered complete. Only include integration tests if this task "
+                "has to integrate with some other task or feature.",
+            ),
+            ("human", f"Generate a list of acceptance criteria for this task:\n{task}"),
+        ]
+    )
+
+    criteria = (prompt | llm.with_structured_output(AcceptanceCriteria)).invoke({})
+
+    return Command(
+        update={
+            "criteria_by_task": {task.task_id: criteria},
+            "messages": [
+                ToolMessage(
+                    f"Generated task acceptance criteria:\n{criteria}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
+        }
+    )
+
+
+@tool
+def generate_task_prompt_for_copilot(
+    task: Task, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
+    """
+    Generate a detailed, context-aware prompt for an AI coding assistant (e.g., GitHub Copilot)
+    to implement or refine the given task.
+
+    This tool analyzes a `Task` object—containing its ID, name, and description—and
+    produces a prompt that can be directly supplied to a coding model to accelerate
+    implementation. The generated prompt provides relevant context, expected behavior,
+    and implementation guidance derived from the task description.
+
+    The goal is to ensure the coding assistant receives enough structured information
+    to produce high-quality, aligned, and maintainable code outputs.
+
+    Parameters
+    ----------
+    task : Task
+        The task for which to generate a Copilot prompt. Should include a meaningful name
+        and description explaining its intent and expected behavior.
+
+    Returns
+    -------
+    copilot_prompt : CopilotPrompt
+        A string prompt generated for use with coding assistants.
+    """
+    llm = AzureChatOpenAI(
+        azure_deployment="gpt-4o-mini",
+        api_version="2025-01-01-preview",
+        temperature=0.4,
+    )
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an expert software engineer tasked with writing high-quality, "
+                "context-aware prompts for AI coding assistants such as GitHub Copilot. "
+                "Your goal is to produce a clear and focused prompt that helps the AI "
+                "understand exactly what needs to be built and how it should behave."
+                "Include:\n"
+                "- What the task aims to achieve\n"
+                "- Key inputs and outputs\n"
+                "- Any relevant edge cases or constraints\n"
+                "- Any architectural or stylistic considerations\n\n"
+                "Return only the prompt, with no premise or feedback.",
+            ),
+            ("human", f"Write a prompt for this task:\n{task}"),
+        ]
+    )
+
+    task_prompt = (prompt | llm).invoke({})
+
+    return Command(
+        update={
+            "prompts_by_task": {task.task_id: prompt},
+            "messages": [
+                ToolMessage(
+                    f"Generated task prompt:\n{task_prompt}", tool_call_id=tool_call_id
+                )
+            ],
+        }
+    )
+
+
+def detect_dependencies(
+    features: Features, tasks: Tasks, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
+    pass

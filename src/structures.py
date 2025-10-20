@@ -57,8 +57,8 @@ class Requirements(BaseModel):
 
 
 class ProjectPlan(BaseModel):
-    requirements: Requirements
-    phases: list[Phase]
+    requirements: Requirements | None = None
+    phases: list[Phase] | None = None
 
 
 class PlannerState(AgentState):

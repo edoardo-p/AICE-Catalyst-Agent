@@ -1,51 +1,37 @@
-from langchain.tools import tool
+from typing import Annotated
+
+from langchain.messages import ToolMessage
+from langchain.tools import InjectedToolCallId, tool
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import AzureChatOpenAI
+from langgraph.types import Command
 
-from structures import ComplexityEstimate, Requirements, Task, Tasks
+from structures import ComplexityEstimate, Feature, Features, Tasks
 
 
 @tool
-def parse_requirements(requirements: str) -> Requirements:
+def parse_requirements(
+    requirements: str, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
     """
-    Parse unstructured business requirements into a structured `Requirements` model.
+    Parse a set of natural-language software requirements into a structured list of features.
 
-    This function uses an Azure-hosted GPT model to analyze raw textual input
-    describing business or product requirements. It extracts and organizes
-    relevant information into a structured `Requirements` object that includes:
+    This tool analyzes the provided `requirements` text (for example, a paragraph describing
+    what a system or application should do) and identifies the distinct functional or
+    non-functional features that must be implemented to satisfy those requirements.
 
-      - **features**: A list of key functional capabilities or deliverables 
-        mentioned or implied in the requirements text.
-      - **constraints**: Any explicit or inferred business, technical, or time-related
-        limitations (e.g., deadlines, budget, compliance rules, or technology stack constraints).
-      - **success_criteria**: Quantifiable or qualitative conditions that define
-        what a “successful” initial product (e.g., MVP) should achieve.
+    The tool uses a language model to interpret the intent and outputs a structured
+    list of `Feature` objects, each representing an actionable system capability.
 
-    The model is instructed to infer missing but reasonable elements when the
-    input requirements are incomplete or ambiguous.
+    Parameters
+    ----------
+    requirements : str
+        Raw user-provided text describing desired functionality or system behavior.
 
-    Args:
-        requirements (str): 
-            A freeform text input containing business or technical requirements 
-            (e.g., stakeholder goals, desired features, timelines, or constraints).
-
-    Returns:
-        Requirements:
-            A Pydantic model instance containing structured fields:
-            - `features`: list[str]
-            - `constraints`: list[str]
-            - `success_criteria`: list[str]
-
-    Example:
-        >>> text = "We need a mobile app for booking fitness classes. It should work on iOS and Android, \
-        allow payment via Stripe, and be ready within 3 months."
-        >>> result = parse_requirements(text)
-        >>> result.features
-        ['Mobile booking system', 'Stripe payment integration', 'Cross-platform support']
-        >>> result.constraints
-        ['3-month delivery timeline']
-        >>> result.success_criteria
-        ['Users can book and pay for fitness classes successfully']
+    Returns
+    -------
+    features : Features
+        A list of parsed `Feature` objects derived from the requirements.
     """
     llm = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
@@ -57,52 +43,46 @@ def parse_requirements(requirements: str) -> Requirements:
             (
                 "system",
                 "You are an expert agent capable of parsing raw requirements and "
-                "inferring structured starting information that can then be expanded upon. "
-                "Your assumptions should not be of a quantitative nature.",
+                "generating a list of features which need to be implemented in order "
+                "to achieve those requirements.",
             ),
             ("human", requirements),
         ]
     )
-    return (prompt | llm.with_structured_output(Requirements)).invoke({})
+
+    output = (prompt | llm.with_structured_output(Features)).invoke({})
+
+    return Command(
+        update={
+            "features": output,
+            "messages": [ToolMessage(f"{output}", tool_call_id=tool_call_id)],
+        }
+    )
 
 
 @tool
-def generate_tasks(feature: str) -> list[Task]:
+def generate_tasks(
+    feature: Feature, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
     """
-    Generate a structured list of tasks from a high-level feature description.
+    Break down one or more software features into concrete implementation tasks.
 
-    This function uses an Azure-hosted GPT model to break down a single feature
-    into a set of actionable tasks. Each task is returned as a `Task` object
-    containing a name, detailed description, AI prompt, and acceptance criteria.
+    This tool takes a `Feature` object representing a high-level system
+    capability and generates a list of `Task` objects. Each task includes
+    a concise name and a clear description, defining the work needed to implement
+    the feature.
 
-    The model is instructed to:
-        - Identify all relevant sub-tasks necessary to implement the feature
-        - Provide clear, human-readable task names and descriptions
-        - Optionally suggest AI tool prompts that could assist in completing the task
+    The output can be used to build project plans, execution steps, or dependency graphs.
 
-    Args:
-        feature (str):
-            A high-level description of the feature or functionality to implement.
-            Example: "Allow users to reset their password via email verification."
+    Parameters
+    ----------
+    feature : Feature
+        A feature that needs to be decomposed into smaller, actionable tasks.
 
-    Returns:
-        Tasks:
-            A list of structured Task objects with the following fields:
-                - name: concise name of the task
-                - description: detailed explanation of the task
-                - ai_tool_prompt: optional AI instruction for generating or completing the task
-                - acceptance_criteria: list of conditions that define task completion
-
-    Example:
-        >>> tasks = generate_tasks("Add social login support for Google and Facebook")
-        >>> for t in tasks.tasks:
-        ...     print(t.name, t.description)
-        ...
-        "Implement OAuth flow" "Set up OAuth authentication endpoints for Google and Facebook"
-        "Update UI for login" "Add buttons and UI logic for social login options"
-
-    Notes:
-        - Designed for integration into AI-assisted project planning pipelines.
+    Returns
+    -------
+    tasks : Tasks
+        A list of tasks belonging to the input feature, paired with the feature_id.
     """
     llm = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
@@ -113,17 +93,30 @@ def generate_tasks(feature: str) -> list[Task]:
         [
             (
                 "system",
-                "You are an expert agent capable of breaking down a feature into "
-                "a list of tasks. Just provide a name and a descriptions for each task.",
+                "You are an expert agent capable of breaking down a feature description into a list of tasks."
+                "Break the feature down into tasks, and reference the feature id",
             ),
-            ("human", feature),
+            (
+                "human",
+                f"{feature.name} (ID {feature.feature_id}): {feature.description}",
+            ),
         ]
     )
-    return (prompt | llm.with_structured_output(Tasks)).invoke({})
+
+    output = (prompt | llm.with_structured_output(Tasks)).invoke({})
+
+    return Command(
+        update={
+            "tasks_by_feature": [output],
+            "messages": [ToolMessage(f"{output}", tool_call_id=tool_call_id)],
+        }
+    )
 
 
 @tool
-def estimate_task_complexity(feature_description: str) -> ComplexityEstimate:
+def estimate_task_complexity(
+    feature_description: str, tool_call_id: Annotated[str, InjectedToolCallId]
+) -> Command:
     """
     Estimate the development complexity of a proposed feature using an LLM-based software
     architecture analysis model.

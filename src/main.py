@@ -1,27 +1,19 @@
-import json
-from typing import Any
-
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_openai import AzureChatOpenAI
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 
-from structures import PlannerState, ProjectPlan
-from tools import estimate_task_complexity, generate_tasks, parse_requirements
+from control_flow import add_user_input_to_state, present_json_output, should_continue
+from structures import ProjectPlanState
+from tools import (
+    generate_tasks,
+    parse_requirements,
+)
 
 load_dotenv()
 
 
-def should_continue(state: PlannerState) -> bool:
-    return None in state["data"].model_dump().values()
-
-
-def present_json_output(state: PlannerState) -> dict[str, Any]:
-    plan_as_dict = state["data"].model_dump()
-    return {"messages": [("ai", plan_as_dict)]}
-
-
-def run_cli_agent(agent: CompiledStateGraph[ProjectPlan]):
+def run_cli_agent(agent: CompiledStateGraph[ProjectPlanState]):
     last_message_idx = 0
     while True:
         question = input("> ")
@@ -61,31 +53,33 @@ def main():
 
     catalyst_agent = create_agent(
         model=main_model,
-        tools=[parse_requirements, generate_tasks, estimate_task_complexity],
+        tools=[parse_requirements, generate_tasks],
         system_prompt="You are an expert agent capable of generating a "
         "structured project plan from raw business requirements. "
-        "Use the tools provided to you to fill in missing portions of the state."
-        "Answer purely with JSON.",
-        state_schema=PlannerState,
+        "Starting from an empty state, slowly fill in missing fields by"
+        "using the tools provided to you.",
+        state_schema=ProjectPlanState,
     )
 
-    graph = StateGraph(ProjectPlan)
+    graph = StateGraph(ProjectPlanState)
     graph.add_node("agent", catalyst_agent)
+    graph.add_node("add_reqs", add_user_input_to_state)
     graph.add_node("present_output", present_json_output)
-    graph.set_entry_point("agent")
+
+    graph.set_entry_point("add_reqs")
+    graph.add_edge("add_reqs", "agent")
     graph.set_finish_point("present_output")
     graph.add_conditional_edges(
         "agent", should_continue, {True: "agent", False: "present_output"}
     )
+    agent = graph.compile()
 
     # run_cli_agent(catalyst_agent)
 
     with open(r"examples\\input1.txt") as f:
         question = f.read()
 
-    output = catalyst_agent.invoke(
-        {"messages": [("human", question)], "data": ProjectPlan()}
-    )
+    output = agent.invoke({"messages": [("human", question)]})
     print(output["messages"][-1].content)
 
 

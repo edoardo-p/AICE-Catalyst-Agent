@@ -163,41 +163,6 @@ def estimate_feature_complexity(
     )
 
 
-def classify_features_into_phase(
-    features: Features, tool_call_id: Annotated[str, InjectedToolCallId]
-) -> Command:
-    """
-    Break down one or more software features into concrete implementation tasks.
-
-    This tool modifies the `Features` object passed as input by assigning a
-    concise and effective phase name to each feature in the list.
-
-    Parameters
-    ----------
-    features : Features
-        A list of features that need to be sorted into distinct phases.
-
-    Returns
-    -------
-    features : Features
-        The same list of features with phase fields populated correctly.
-    """
-    for feature in features.features:
-        feature.phase = "Core" if feature.feature_id == "0" else "Later"
-
-    return Command(
-        update={
-            "features": features,
-            "messages": [
-                ToolMessage(
-                    f"classified features into phases: {features}",
-                    tool_call_id=tool_call_id,
-                )
-            ],
-        }
-    )
-
-
 @tool
 def create_task_acceptance_criteria(
     task: Task, tool_call_id: Annotated[str, InjectedToolCallId]

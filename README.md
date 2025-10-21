@@ -39,11 +39,12 @@ To temporarily run the agent with the test tools, open `src/main.py` and replace
 
 ## Project structure
 
+- `src/control_flow.py` — helper functions used to control the execution of the agent
 - `src/main.py` — builds and runs the agent and state graph
+- `src/prompts.py` — externalized prompts used by the tools and the agent
 - `src/tools.py` — production tools that call the LLM (Azure)
 - `src/test_tools.py` — deterministic test implementations of the same tools
 - `src/structures.py` — Pydantic models describing the `ProjectPlanState` schema
-- `src/control_flow.py` — helper functions used by the StateGraph
 - `examples/` — example input and expected output files
 
 ## Implemented tools
@@ -60,8 +61,6 @@ List of implemented tools:
   scoped by feature (e.g., `"0-0"`).
 - `estimate_feature_complexity(feature, tasks)` — produces a `ComplexityEstimate` for a
   feature given its tasks (label + estimated days + risks + confidence).
-- `classify_features_into_phase(features)` — assigns a short `phase` label to each
-  `Feature` (e.g., Discovery, Core, Later).
 - `create_task_acceptance_criteria(task)` — generates `AcceptanceCriteria` containing
   BDD-style `Scenario`s and unit/integration test specs for a `Task`.
 - `generate_task_prompt_for_copilot(task)` — builds a concise prompt string that can

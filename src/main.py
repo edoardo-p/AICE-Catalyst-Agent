@@ -9,7 +9,6 @@ from control_flow import next_steps_hint_message, should_continue
 from prompts import AGENT_SYSTEM_PROMPT
 from structures import ProjectPlanState, present_json_output
 from tools import (
-    classify_features_into_phase,
     create_task_acceptance_criteria,
     estimate_feature_complexity,
     generate_execution_order,
@@ -40,7 +39,6 @@ def create_project_planner_agent():
             parse_requirements,
             generate_tasks,
             estimate_feature_complexity,
-            # classify_features_into_phase, # unsure if this is really necessary; parse_requirements seems to populate the phase just fine
             create_task_acceptance_criteria,
             generate_task_prompt_for_copilot,
             generate_execution_order,
@@ -70,7 +68,7 @@ def save_mermaid_diagram(agent):
 
 def main():
     agent = create_project_planner_agent()
-    with open(r"examples\\input2.txt") as f:
+    with open(r"examples\\input1.txt") as f:
         question = f.read()
 
     # mlflow.set_experiment("Project Planning Agent")

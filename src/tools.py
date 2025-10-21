@@ -192,52 +192,6 @@ def estimate_feature_complexity(
     )
 
 
-def classify_features_into_phase(
-    features: Features, tool_call_id: Annotated[str, InjectedToolCallId]
-) -> Command:
-    """
-    Break down one or more software features into concrete implementation tasks.
-
-    This tool modifies the `Features` object passed as input by assigning a
-    concise and effective phase name to each feature in the list.
-
-    Parameters
-    ----------
-    features : Features
-        A list of features that need to be sorted into distinct phases.
-
-    Returns
-    -------
-    features : Features
-        The same list of features with phase fields populated correctly.
-    """
-    llm = AzureChatOpenAI(
-        azure_deployment="gpt-4o-mini",
-        api_version="2025-01-01-preview",
-        temperature=0.0,
-    )
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", CLASSIFY_FEATURE_PHASES_LLM_PROMPT),
-            ("human", "\n".join(str(feature) for feature in features.features)),
-        ]
-    )
-
-    new_features = (prompt | llm.with_structured_output(Features)).invoke({})
-
-    return Command(
-        update={
-            "features": new_features,
-            "messages": [
-                ToolMessage(
-                    f"Updated in 'features' field:\n{new_features}",
-                    tool_call_id=tool_call_id,
-                )
-            ],
-        }
-    )
-
-
 @tool
 def create_task_acceptance_criteria(
     task: Task, tool_call_id: Annotated[str, InjectedToolCallId]

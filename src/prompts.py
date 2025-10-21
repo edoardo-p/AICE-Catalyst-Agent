@@ -16,13 +16,7 @@ Use this tool to write todos for filling the following state fields by including
 When you think you are finished, or are unsure how to proceed, check the todos that need to be completed."""
 
 AGENT_SYSTEM_PROMPT = """You are an expert agent capable of generating a structured project plan from raw business requirements.
-Starting from an empty state, slowly fill in missing fields by using the tools provided to you.
-These are the state fields you need to fill:
-- features
-- tasks_by_feature
-- complexity_by_feature
-- criteria_by_task
-- prompts_by_task"""
+Starting from an empty state, slowly fill in missing fields by using the tools provided to you."""
 
 PARSE_REQUIREMENTS_LLM_PROMPT = """You are an expert agent capable of parsing raw requirements and generating a list of features which need to be implemented in order to achieve those requirements."""
 

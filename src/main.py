@@ -1,11 +1,11 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain.agents.middleware import TodoListMiddleware
 from langchain_openai import AzureChatOpenAI
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 
 from control_flow import add_user_input_to_state, present_json_output, should_continue
-from prompts import AGENT_SYSTEM_PROMPT, WRITE_TODOS_SYSTEM_PROMPT
+from prompts import AGENT_SYSTEM_PROMPT
+from steps_planner import next_steps_hint_message
 from structures import ProjectPlanState
 from tools import (
     classify_features_into_phase,
@@ -59,7 +59,7 @@ def main():
 
     catalyst_agent = create_agent(
         model=main_model,
-        middleware=[TodoListMiddleware(tool_description=WRITE_TODOS_SYSTEM_PROMPT)],
+        middleware=[next_steps_hint_message],
         tools=[
             parse_requirements,
             generate_tasks,

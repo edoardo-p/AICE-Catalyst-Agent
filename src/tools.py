@@ -6,6 +6,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import AzureChatOpenAI
 from langgraph.types import Command
 
+from prompts import (
+    CLASSIFY_FEATURE_PHASES_LLM_PROMPT,
+    CREATE_ACCEPTANCE_CRITERIA_LLM_PROMPT,
+    ESTIMATE_COMPLEXITY_LLM_PROMPT,
+    GENERATE_COPILOT_PROMPTS_LLM_PROMPT,
+    GENERATE_TASKS_LLM_PROMPT,
+    PARSE_REQUIREMENTS_LLM_PROMPT,
+)
 from structures import (
     AcceptanceCriteria,
     ComplexityEstimate,
@@ -47,12 +55,7 @@ def parse_requirements(
     )
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                "You are an expert agent capable of parsing raw requirements and "
-                "generating a list of features which need to be implemented in order "
-                "to achieve those requirements.",
-            ),
+            ("system", PARSE_REQUIREMENTS_LLM_PROMPT),
             ("human", requirements),
         ]
     )
@@ -66,7 +69,7 @@ def parse_requirements(
             "features": features,
             "messages": [
                 ToolMessage(
-                    f"Generated the following features:\n{features}",
+                    f"Filled in 'features' field:\n{features}",
                     tool_call_id=tool_call_id,
                 )
             ],
@@ -105,11 +108,7 @@ def generate_tasks(
     )
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                "You are an expert agent capable of breaking down a feature description into a list of tasks."
-                "Generate a list of tasks for the feature provided by the user.",
-            ),
+            ("system", GENERATE_TASKS_LLM_PROMPT),
             ("human", str(feature)),
         ]
     )
@@ -123,7 +122,7 @@ def generate_tasks(
             "tasks_by_feature": {feature.feature_id: tasks},
             "messages": [
                 ToolMessage(
-                    f"Generated the following tasks:\n{tasks}",
+                    f"Filled in 'tasks_by_feature' field:\n{tasks}",
                     tool_call_id=tool_call_id,
                 )
             ],
@@ -166,22 +165,7 @@ def estimate_feature_complexity(
     )
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                """You are an expert software architect specializing in complexity estimation. 
-Analyze features thoroughly considering technical complexity, dependencies, and unknowns. 
-Consider:
-- The complexity of the task breakdown
-- Technical complexity (algorithms, data structures, architecture)
-- Integration points and dependencies
-- Unknown factors and research needed
-- Testing requirements
-- Edge cases and error handling
-Simple: 1-3 days, straightforward implementation
-Medium: 4-7 days, moderate complexity or integration
-Complex: 8-15 days, significant complexity or multiple integrations
-Very Complex: 16+ days, high complexity, research, or many unknowns.""",
-            ),
+            ("system", ESTIMATE_COMPLEXITY_LLM_PROMPT),
             (
                 "human",
                 f"Feature: {feature}\nTasks:\n{'\n'.join(str(task) for task in tasks.tasks)}",
@@ -196,7 +180,8 @@ Very Complex: 16+ days, high complexity, research, or many unknowns.""",
             "complexity_by_feature": {feature.feature_id: output},
             "messages": [
                 ToolMessage(
-                    f"Calculated complexities:\n{output}", tool_call_id=tool_call_id
+                    f"Filled in 'complexity_by_feature' field:\n{output}",
+                    tool_call_id=tool_call_id,
                 )
             ],
         }
@@ -229,11 +214,7 @@ def classify_features_into_phase(
     )
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                "You are an expert agent capable of grouping feature descriptions into phases."
-                "Do not alter the names or descriptions of features, simply modify the phase appropriately.",
-            ),
+            ("system", CLASSIFY_FEATURE_PHASES_LLM_PROMPT),
             ("human", "\n".join(str(feature) for feature in features.features)),
         ]
     )
@@ -245,7 +226,7 @@ def classify_features_into_phase(
             "features": new_features,
             "messages": [
                 ToolMessage(
-                    f"Updated feature phases:\n{new_features}",
+                    f"Updated in 'features' field:\n{new_features}",
                     tool_call_id=tool_call_id,
                 )
             ],
@@ -288,14 +269,7 @@ def create_task_acceptance_criteria(
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                "You are a senior software engineer responsible for defining clear, "
-                "verifiable acceptance criteria for development tasks. Each criterion "
-                "should describe an observable condition that determines when the task "
-                "can be considered complete. Only include integration tests if this task "
-                "has to integrate with some other task or feature.",
-            ),
+            ("system", CREATE_ACCEPTANCE_CRITERIA_LLM_PROMPT),
             ("human", f"Generate a list of acceptance criteria for this task:\n{task}"),
         ]
     )
@@ -307,7 +281,7 @@ def create_task_acceptance_criteria(
             "criteria_by_task": {task.task_id: criteria},
             "messages": [
                 ToolMessage(
-                    f"Generated task acceptance criteria:\n{criteria}",
+                    f"Filled in 'criteria_by_task' field:\n{criteria}",
                     tool_call_id=tool_call_id,
                 )
             ],
@@ -350,19 +324,7 @@ def generate_task_prompt_for_copilot(
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                "You are an expert software engineer tasked with writing high-quality, "
-                "context-aware prompts for AI coding assistants such as GitHub Copilot. "
-                "Your goal is to produce a clear and focused prompt that helps the AI "
-                "understand exactly what needs to be built and how it should behave."
-                "Include:\n"
-                "- What the task aims to achieve\n"
-                "- Key inputs and outputs\n"
-                "- Any relevant edge cases or constraints\n"
-                "- Any architectural or stylistic considerations\n\n"
-                "Return only the prompt, with no premise or feedback.",
-            ),
+            ("system", GENERATE_COPILOT_PROMPTS_LLM_PROMPT),
             ("human", f"Write a prompt for this task:\n{task}"),
         ]
     )
@@ -374,7 +336,8 @@ def generate_task_prompt_for_copilot(
             "prompts_by_task": {task.task_id: prompt},
             "messages": [
                 ToolMessage(
-                    f"Generated task prompt:\n{task_prompt}", tool_call_id=tool_call_id
+                    f"Filled in 'prompts_by_task' field:\n{task_prompt}",
+                    tool_call_id=tool_call_id,
                 )
             ],
         }

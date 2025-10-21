@@ -5,6 +5,7 @@ from langchain_openai import AzureChatOpenAI
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 
 from control_flow import add_user_input_to_state, present_json_output, should_continue
+from prompts import AGENT_SYSTEM_PROMPT, WRITE_TODOS_SYSTEM_PROMPT
 from structures import ProjectPlanState
 from tools import (
     classify_features_into_phase,
@@ -58,7 +59,7 @@ def main():
 
     catalyst_agent = create_agent(
         model=main_model,
-        middleware=[TodoListMiddleware()],
+        middleware=[TodoListMiddleware(tool_description=WRITE_TODOS_SYSTEM_PROMPT)],
         tools=[
             parse_requirements,
             generate_tasks,
@@ -67,19 +68,8 @@ def main():
             create_task_acceptance_criteria,
             generate_task_prompt_for_copilot,
         ],
-        system_prompt="You are an expert agent capable of generating a "
-        "structured project plan from raw business requirements. "
-        "Starting from an empty state, slowly fill in missing fields by"
-        "using the tools provided to you."
-        "These are the state fields you need to fill:"
-        "- features"
-        "- tasks_by_feature"
-        "- complexity_by_feature"
-        "- criteria_by_task"
-        "- prompts_by_task"
-        # "- dependency_graph"
-        "You also have access to a todo writer tool which you can "
-        "use to plan which tools to call next.",
+        system_prompt=AGENT_SYSTEM_PROMPT,
+        state_schema=ProjectPlanState,
     )
 
     graph = StateGraph(ProjectPlanState)
@@ -89,11 +79,11 @@ def main():
 
     graph.set_entry_point("add_reqs")
     graph.add_edge("add_reqs", "agent")
-    graph.add_edge("agent", "present_output")
+    # graph.add_edge("agent", "present_output")
     graph.set_finish_point("present_output")
-    # graph.add_conditional_edges(
-    #     "agent", should_continue, {True: "agent", False: "present_output"}
-    # )
+    graph.add_conditional_edges(
+        "agent", should_continue, {True: "agent", False: "present_output"}
+    )
     agent = graph.compile()
 
     # run_cli_agent(catalyst_agent)

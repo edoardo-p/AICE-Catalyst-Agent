@@ -51,17 +51,13 @@ class Feature(BaseModel):
 
 
 class Tasks(BaseModel):
-    """List of Task objects, grouped by feature_id"""
-
     tasks: list[Task] = Field(
         default_factory=list,
-        description="List of Task objects associated with the feature_id.",
+        description="List of `Task` objects.",
     )
 
 
 class Features(BaseModel):
-    """List of Feature objects"""
-
     features: list[Feature] = Field(
         default_factory=list,
         description="List of `Feature` objects inferred from requirements.",
@@ -84,9 +80,6 @@ class ComplexityEstimate(BaseModel):
         ge=0.0,
         le=1.0,
         description="Confidence level (0.0-1.0) for the estimate.",
-    )
-    reasoning: str = Field(
-        default="", description="Short explanation of reasoning behind the estimate."
     )
 
 

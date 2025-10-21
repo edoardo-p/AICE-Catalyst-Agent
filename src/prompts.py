@@ -20,9 +20,6 @@ Medium: 4-7 days, moderate complexity or integration
 Complex: 8-15 days, significant complexity or multiple integrations
 Very Complex: 16+ days, high complexity, research, or many unknowns."""
 
-CLASSIFY_FEATURE_PHASES_LLM_PROMPT = """You are an expert agent capable of grouping feature descriptions into phases.
-Do not alter the names or descriptions of features, simply modify the phase appropriately."""
-
 CREATE_ACCEPTANCE_CRITERIA_LLM_PROMPT = """You are a senior software engineer responsible for defining clear, verifiable acceptance criteria for development tasks.
 Each criterion should describe an observable condition that determines when the task can be considered complete.
 Only include integration tests if this task has to integrate with some other task or feature."""

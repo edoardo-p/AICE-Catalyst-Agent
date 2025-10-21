@@ -8,7 +8,6 @@ from langchain_openai import AzureChatOpenAI
 from langgraph.types import Command
 
 from prompts import (
-    CLASSIFY_FEATURE_PHASES_LLM_PROMPT,
     CREATE_ACCEPTANCE_CRITERIA_LLM_PROMPT,
     DETECT_DEPENDENCIES_LLM_PROMPT,
     ESTIMATE_COMPLEXITY_LLM_PROMPT,

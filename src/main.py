@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_openai import AzureChatOpenAI
-from langgraph.graph.state import CompiledStateGraph, StateGraph
+from langgraph.graph.state import StateGraph
 
 from control_flow import add_user_input_to_state, present_json_output, should_continue
 from prompts import AGENT_SYSTEM_PROMPT
@@ -33,7 +33,7 @@ def create_project_planner_agent():
             parse_requirements,
             generate_tasks,
             estimate_feature_complexity,
-            # classify_features_into_phase,
+            # classify_features_into_phase, # unsure if this is really necessary; parse_requirements seems to populate the phase just fine
             create_task_acceptance_criteria,
             generate_task_prompt_for_copilot,
         ],
@@ -55,10 +55,20 @@ def create_project_planner_agent():
     return graph.compile()
 
 
+def save_mermaid_diagram(agent):
+    with open("agent_graph.png", "wb") as f:
+        f.write(agent.get_graph(xray=True).draw_mermaid_png())
+
+
 def main():
     agent = create_project_planner_agent()
     with open(r"examples\\input2.txt") as f:
         question = f.read()
+
+    # mlflow.set_experiment("Project Planning Agent")
+    # with mlflow.start_run():
+    #     logged_model = mlflow.langchain.log_model(agent, name="ProjectPlanningAgent")
+    # loaded_agent = mlflow.pyfunc.load_model(logged_model.model_uri)
 
     output = agent.invoke({"messages": [("human", question)]})
     print(output["messages"][-1].content)

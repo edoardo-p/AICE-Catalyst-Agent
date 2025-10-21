@@ -1,12 +1,13 @@
+from typing import Any
+
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_openai import AzureChatOpenAI
 from langgraph.graph.state import StateGraph
 
-from control_flow import add_user_input_to_state, present_json_output, should_continue
+from control_flow import next_steps_hint_message, should_continue
 from prompts import AGENT_SYSTEM_PROMPT
-from steps_planner import next_steps_hint_message
-from structures import ProjectPlanState
+from structures import ProjectPlanState, present_json_output
 from tools import (
     classify_features_into_phase,
     create_task_acceptance_criteria,
@@ -18,6 +19,11 @@ from tools import (
 )
 
 load_dotenv()
+
+
+def add_user_input_to_state(state: ProjectPlanState) -> dict[str, Any]:
+    user_input = state.get("messages")[-1].content
+    return {"raw_requirements": user_input}
 
 
 def create_project_planner_agent():

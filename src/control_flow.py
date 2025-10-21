@@ -1,15 +1,47 @@
-import json
-from collections import defaultdict
 from typing import Any
 
-from langchain_core.messages import AIMessage
+from langchain.agents.middleware import before_model
+from langchain_core.messages import SystemMessage
+from langgraph.runtime import Runtime
 
 from structures import ProjectPlanState
 
 
-def add_user_input_to_state(state: ProjectPlanState) -> dict[str, Any]:
-    user_input = state.get("messages")[-1].content
-    return {"raw_requirements": user_input}
+def _summarize_state(state: ProjectPlanState) -> str:
+    required_state_fields = (
+        "features",
+        "tasks_by_feature",
+        "complexity_by_feature",
+        "criteria_by_task",
+        "prompts_by_task",
+        "execution_order",
+    )
+
+    field_status = {
+        field: "missing" if field not in state or not state[field] else "filled"
+        for field in required_state_fields
+    }
+
+    return "\n".join(f"{field}: {status}" for field, status in field_status.items())
+
+
+@before_model
+def next_steps_hint_message(
+    state: ProjectPlanState, runtime: Runtime[None]
+) -> dict[str, Any]:
+    messages = state.get("messages", [])
+    if not any(message.type == "ai" for message in messages):
+        return {}  # Let the agent do its thing the first time round
+
+    field_statuses = _summarize_state(state)
+    system_message_hint = SystemMessage(
+        "Hint for next steps. "
+        "This is the current state:\n"
+        f"{field_statuses}.\n"
+        "Fill in what is missing by using the tools provided."
+    )
+
+    return {"messages": [system_message_hint]}
 
 
 def should_continue(state: ProjectPlanState) -> bool:
@@ -34,48 +66,7 @@ def should_continue(state: ProjectPlanState) -> bool:
             ) or task.task_id not in state.get("prompts_by_task", {}):
                 return True
 
-    # if not state.dependency_graph:
-    #     return True
+    if state.get("execution_order") is None:
+        return True
 
     return False
-
-
-def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
-    features = state.get("features")
-    tasks_by_features = state.get("tasks_by_feature", {})
-    criteria_by_task = state.get("criteria_by_task", {})
-    prompts_by_task = state.get("prompts_by_task", {})
-
-    tasks_by_id = {
-        task.task_id: {
-            "name": task.name,
-            "description": task.description,
-            "criteria": criteria_by_task[task.task_id].model_dump(),
-            "prompt": prompts_by_task[task.task_id],
-        }
-        for _, tasks in tasks_by_features.items()
-        for task in tasks.tasks
-    }
-
-    complexity_by_feature = state.get("complexity_by_feature", {})
-
-    features_by_phase = defaultdict(list)
-    for feature in features.features:
-        features_by_phase[feature.phase].append(
-            {
-                "name": feature.name,
-                "description": feature.description,
-                "complexity": complexity_by_feature[feature.feature_id].model_dump(),
-                "tasks": [
-                    tasks_by_id[task.task_id]
-                    for task in tasks_by_features[feature.feature_id].tasks
-                ],
-            }
-        )
-
-    out_object = {
-        "raw_requirements": state["raw_requirements"],
-        "phases": features_by_phase,
-    }
-
-    return {"messages": [AIMessage(json.dumps(out_object))]}

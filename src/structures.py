@@ -1,6 +1,9 @@
-from typing import Annotated, Literal, TypeVar
+import json
+from collections import defaultdict
+from typing import Annotated, Any, Literal, TypeVar
 
 from langchain.agents.middleware import AgentState
+from langchain_core.messages import AIMessage
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
@@ -160,3 +163,44 @@ class ProjectPlanState(AgentState):
     criteria_by_task: Annotated[dict[str, AcceptanceCriteria], reduce_dict]
     prompts_by_task: Annotated[dict[str, str], reduce_dict]
     execution_order: list[str]
+
+
+def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
+    features = state.get("features")
+    tasks_by_features = state.get("tasks_by_feature", {})
+    criteria_by_task = state.get("criteria_by_task", {})
+    prompts_by_task = state.get("prompts_by_task", {})
+
+    tasks_by_id = {
+        task.task_id: {
+            "name": task.name,
+            "description": task.description,
+            "criteria": criteria_by_task[task.task_id].model_dump(),
+            "prompt": prompts_by_task[task.task_id],
+        }
+        for _, tasks in tasks_by_features.items()
+        for task in tasks.tasks
+    }
+
+    complexity_by_feature = state.get("complexity_by_feature", {})
+
+    features_by_phase = defaultdict(list)
+    for feature in features.features:
+        features_by_phase[feature.phase].append(
+            {
+                "name": feature.name,
+                "description": feature.description,
+                "complexity": complexity_by_feature[feature.feature_id].model_dump(),
+                "tasks": [
+                    tasks_by_id[task.task_id]
+                    for task in tasks_by_features[feature.feature_id].tasks
+                ],
+            }
+        )
+
+    out_object = {
+        "raw_requirements": state["raw_requirements"],
+        "phases": features_by_phase,
+    }
+
+    return {"messages": [AIMessage(json.dumps(out_object))]}

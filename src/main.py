@@ -19,7 +19,7 @@ from tools import (
 load_dotenv()
 
 
-def main():
+def create_project_planner_agent():
     main_model = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
         api_version="2025-01-01-preview",
@@ -33,7 +33,7 @@ def main():
             parse_requirements,
             generate_tasks,
             estimate_feature_complexity,
-            classify_features_into_phase,
+            # classify_features_into_phase,
             create_task_acceptance_criteria,
             generate_task_prompt_for_copilot,
         ],
@@ -52,8 +52,11 @@ def main():
     graph.add_conditional_edges(
         "agent", should_continue, {True: "agent", False: "present_output"}
     )
-    agent = graph.compile()
+    return graph.compile()
 
+
+def main():
+    agent = create_project_planner_agent()
     with open(r"examples\\input2.txt") as f:
         question = f.read()
 

@@ -352,7 +352,29 @@ def generate_task_prompt_for_copilot(
 def generate_execution_order(
     tasks: Tasks, tool_call_id: Annotated[str, InjectedToolCallId]
 ) -> Command:
-    """"""
+    """
+    Determine the optimal execution order for a set of software development tasks based on inferred dependencies.
+
+    This tool analyzes all provided `Task` objects to identify logical and technical dependencies
+    (i.e., which tasks must be completed before others). It uses a language model to infer blockers
+    between tasks, constructs a dependency graph, and computes a topological execution order that
+    respects all dependency constraints.
+
+    The resulting order ensures that each task appears only after all of its blockers have been
+    completed, providing a dependency-safe sequence for execution or scheduling.
+
+    Parameters
+    ----------
+    tasks : Tasks
+        A collection of `Task` objects representing discrete units of work to be analyzed for
+        dependency relationships and ordering.
+
+    Returns
+    -------
+    execution_order : list[str]
+        An ordered list of task names representing the recommended execution sequence
+        (from first to last), ensuring all dependency constraints are satisfied.
+    """
     llm = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
         api_version="2025-01-01-preview",

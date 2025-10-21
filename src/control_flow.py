@@ -11,7 +11,7 @@ def add_user_input_to_state(state: ProjectPlanState) -> dict[str, Any]:
 
 def should_continue(state: ProjectPlanState) -> bool:
     features = state.get("features")
-    tasks = state.get("tasks_by_feature", {})
+    tasks_by_feature = state.get("tasks_by_feature", {})
 
     if not features:
         return True
@@ -19,16 +19,17 @@ def should_continue(state: ProjectPlanState) -> bool:
     for feature in features.features:
         if (
             not feature.phase
-            or feature.feature_id not in tasks
+            or feature.feature_id not in tasks_by_feature
             or feature.feature_id not in state.get("complexity_by_feature", {})
         ):
             return True
 
-    for task_id in tasks:
-        if task_id not in state.get("criteria_by_task", {}) or task_id not in state.get(
-            "prompts_by_task", {}
-        ):
-            return True
+    for tasks in tasks_by_feature.values():
+        for task in tasks.tasks:
+            if task.task_id not in state.get(
+                "criteria_by_task", {}
+            ) or task.task_id not in state.get("prompts_by_task", {}):
+                return True
 
     # if not state.dependency_graph:
     #     return True

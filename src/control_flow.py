@@ -1,5 +1,8 @@
 import json
+from collections import defaultdict
 from typing import Any
+
+from langchain_core.messages import AIMessage
 
 from structures import ProjectPlanState
 
@@ -39,36 +42,46 @@ def should_continue(state: ProjectPlanState) -> bool:
 
 def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
     features = state.get("features")
-    tasks = state.get("tasks_by_feature", {})
+    tasks_by_features = state.get("tasks_by_feature", {})
+    criteria_by_task = state.get("criteria_by_task", {})
+    prompts_by_task = state.get("prompts_by_task", {})
 
-    out_object = {
-        feature.name: tasks.get(feature.feature_id, []) for feature in features.features
+    tasks = {
+        task.task_id: {
+            "name": task.name,
+            "description": task.description,
+            "criteria": criteria_by_task[task.task_id],
+            "prompt": prompts_by_task[task.task_id],
+        }
+        for _, tasks in tasks_by_features.items()
+        for task in tasks.tasks
     }
 
-    return {"messages": [("ai", json.dumps(out_object))]}
+    complexity_by_feature = state.get("complexity_by_feature", {})
 
+    features_by_phase = defaultdict(list)
+    for feature in features.features:
+        features_by_phase[feature.phase].append(
+            {
+                "name": feature.name,
+                "description": feature.description,
+                "complexity": complexity_by_feature[feature.feature_id],
+                "tasks": [
+                    tasks[task.task_id]
+                    for task in tasks_by_features[feature.feature_id].tasks
+                ],
+            }
+        )
 
-# def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
-#     features = state.get("features")
-#     features_by_phase = defaultdict(list)
-#     for feature in features.features:
-#         features_by_phase[feature.phase].append(feature)
-#     tasks_by_features = state.get("tasks_by_feature")
+    # out_object = {}
+    # for phase, features in features_by_phase.items():
+    #     for feature in features:
+    #         out_object[phase] = feature
 
-#     tasks_dict = {
-#         task.task_id: task for tasks in tasks_by_features for task in tasks.tasks
-#     }
+    # out_object = {
+    #     features: features
+    #     for phase, features in features_by_phase.items()
+    #     for feature in features
+    # }
 
-#     tasks_obj = [
-#         {
-#             **task.model_dump(exclude={"task_id"}),
-#         }
-#         for task_id, task in tasks_dict.items()
-#     ]
-
-#     out_object = {
-#         feature.name: tasks_dict.get(feature.feature_id, [])
-#         for feature in features.features
-#     }
-
-#     return {"messages": [("ai", json.dumps(out_object))]}
+    return {"messages": [AIMessage(json.dumps(features_by_phase))]}

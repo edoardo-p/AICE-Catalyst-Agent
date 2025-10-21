@@ -17,28 +17,16 @@ prompts.
 
 ## Quickstart (developer)
 
-1. Create and activate a Python virtual environment (recommended):
+1. Create and activate a Python virtual environment. The repo was set up with uv.
 
-```cmd
-python -m venv .venv
-.venv\Scripts\activate
+2. Configure the following Azure credentials in a `.env` file:
+
+```env
+AZURE_OPENAI_API_KEY="your_api_key"
+AZURE_OPENAI_ENDPOINT="your_endpoint"
 ```
 
-2. Install the project in editable mode (this installs runtime dependencies declared in pyproject.toml):
-
-```cmd
-pip install -e .
-```
-
-3. Configure Azure credentials and any environment variables needed by `langchain_openai` (see the project's prompts and tools for expected env vars).
-
-4. Run the sample agent using an example input file (the agent will print JSON output):
-
-```cmd
-python src\main.py
-```
-
-By default `src/main.py` reads from `examples/input2.txt` when executed as a script.
+3. Run the sample agent using an example input file from `/examples`, or come up with your own business requirement! The agent will print JSON output. The input can be changed in `src/main.py`.
 
 ## Using the test tools
 
@@ -47,9 +35,7 @@ For deterministic behavior during development or CI, use the test tools in
 but return fixed outputs (consistent feature/task ids) so you can validate agent
 flows without calling the LLM.
 
-To temporarily run the agent with the test tools, open `src/main.py` and replace the
-`tools=[ ... ]` list with imports from `src.test_tools` (or add the test tools alongside
-the real ones). This will exercise the state transitions end-to-end deterministically.
+To temporarily run the agent with the test tools, open `src/main.py` and replace the import tools from `test_tools` instead of `tools`. The functions have the same names. This will exercise the state transitions end-to-end deterministically.
 
 ## Project structure
 
@@ -60,7 +46,34 @@ the real ones). This will exercise the state transitions end-to-end deterministi
 - `src/control_flow.py` — helper functions used by the StateGraph
 - `examples/` — example input and expected output files
 
-## Notes and tips
+## Implemented tools
+
+This project includes a set of tools (in `src/tools.py`) that the agent uses to
+populate the `ProjectPlanState`. Each tool is also mirrored by a deterministic
+test implementation in `src/test_tools.py` for offline testing.
+
+List of implemented tools:
+
+- `parse_requirements(requirements)` — parses free-form requirements into a `Features`
+  object containing `Feature` entries (assigns `feature_id`s).
+- `generate_tasks(feature)` — breaks a `Feature` into a `Tasks` list; assigns `task_id`s
+  scoped by feature (e.g., `"0-0"`).
+- `estimate_feature_complexity(feature, tasks)` — produces a `ComplexityEstimate` for a
+  feature given its tasks (label + estimated days + risks + confidence).
+- `classify_features_into_phase(features)` — assigns a short `phase` label to each
+  `Feature` (e.g., Discovery, Core, Later).
+- `create_task_acceptance_criteria(task)` — generates `AcceptanceCriteria` containing
+  BDD-style `Scenario`s and unit/integration test specs for a `Task`.
+- `generate_task_prompt_for_copilot(task)` — builds a concise prompt string that can
+  be fed to a coding assistant to implement the task.
+- `generate_execution_order(tasks)` / `detect_dependencies(features, tasks)` — (production)
+  tools that infer blockers between tasks and compute a topological execution order.
+
+These tools return `Command` objects with an `update` mapping that the StateGraph
+merges into the shared agent state, and add a tool message with the result so the agent has access to them; the test tools return deterministic `Command`
+updates so you can validate graph behavior without contacting the LLM.
+
+## Notes
 
 - The state schema uses `typing.Annotated` to associate reducer functions (see `reduce_dict`
   in `src/structures.py`) with specific dict fields. The LangGraph state graph recognizes

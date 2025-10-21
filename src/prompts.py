@@ -1,20 +1,3 @@
-WRITE_TODOS_SYSTEM_PROMPT = """You have access to the `write_todos` tool to help you manage and plan complex objectives.
-Use this tool for complex objectives to ensure that you are tracking each necessary step and giving the user visibility into your progress.
-This tool is very helpful for planning complex objectives, and for breaking down these larger complex objectives into smaller steps.
-
-It is critical that you mark todos as completed as soon as you are done with a step. Do not batch up multiple steps before marking them as completed.
-For simple objectives that only require a few steps, it is better to just complete the objective directly and NOT use this tool.
-Writing todos takes time and tokens, use it when it is helpful for managing complex many-step problems! But not for simple few-step requests.
-
-Use this tool to write todos for filling the following state fields by including the tool you think would be best suited to do so:
-- features
-- tasks_by_feature
-- complexity_by_feature
-- criteria_by_task
-- prompts_by_task
-
-When you think you are finished, or are unsure how to proceed, check the todos that need to be completed."""
-
 AGENT_SYSTEM_PROMPT = """You are an expert agent capable of generating a structured project plan from raw business requirements.
 Starting from an empty state, slowly fill in missing fields by using the tools provided to you."""
 
@@ -52,3 +35,22 @@ Include:
 - Any relevant edge cases or constraints
 - Any architectural or stylistic considerations
 Return only the prompt, with no premise or feedback."""
+
+DETECT_DEPENDENCIES_LLM_PROMPT = """You are an expert software project planner and systems architect specializing in task dependency analysis.
+Your goal is to analyze a list of software development tasks and determine, for each task, which other tasks must be completed before it: its blockers.
+A "blocker" is another task that this task depends on to start or complete.
+Dependencies may be functional (e.g., requires an API endpoint before UI work), architectural (e.g., database schema must exist before backend logic), or contextual (e.g., design or configuration work needed before integration).
+
+Instructions
+- Carefully read the full list of provided tasks.
+- For each task, identify any other tasks that must be completed first.
+- Use logical and technical reasoning to infer dependencies based on:
+  - Order of implementation
+  - Data flow or component relationships
+  - API/UI/backend integration sequencing
+  - Setup or configuration prerequisites
+- If a task can be performed independently, assign it an empty list of blockers.
+
+Guidelines
+- Do not infer circular dependencies.
+- Base all reasoning solely on the task names and descriptions."""

@@ -1,3 +1,4 @@
+from collections import defaultdict, deque
 from typing import Annotated
 
 from langchain.messages import ToolMessage
@@ -9,6 +10,7 @@ from langgraph.types import Command
 from prompts import (
     CLASSIFY_FEATURE_PHASES_LLM_PROMPT,
     CREATE_ACCEPTANCE_CRITERIA_LLM_PROMPT,
+    DETECT_DEPENDENCIES_LLM_PROMPT,
     ESTIMATE_COMPLEXITY_LLM_PROMPT,
     GENERATE_COPILOT_PROMPTS_LLM_PROMPT,
     GENERATE_TASKS_LLM_PROMPT,
@@ -17,9 +19,11 @@ from prompts import (
 from structures import (
     AcceptanceCriteria,
     ComplexityEstimate,
+    DependencyGraph,
     Feature,
     Features,
     Task,
+    TaskBlockers,
     Tasks,
 )
 
@@ -161,7 +165,7 @@ def estimate_feature_complexity(
     llm = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
         api_version="2025-01-01-preview",
-        temperature=0.2,
+        temperature=0.0,
     )
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -210,7 +214,7 @@ def classify_features_into_phase(
     llm = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
         api_version="2025-01-01-preview",
-        temperature=0.2,
+        temperature=0.0,
     )
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -344,7 +348,83 @@ def generate_task_prompt_for_copilot(
     )
 
 
-def detect_dependencies(
-    features: Features, tasks: Tasks, tool_call_id: Annotated[str, InjectedToolCallId]
+@tool
+def generate_execution_order(
+    tasks: Tasks, tool_call_id: Annotated[str, InjectedToolCallId]
 ) -> Command:
-    pass
+    """"""
+    llm = AzureChatOpenAI(
+        azure_deployment="gpt-4o-mini",
+        api_version="2025-01-01-preview",
+        temperature=0.0,
+    )
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", DETECT_DEPENDENCIES_LLM_PROMPT),
+            ("human", "\n".join(str(task) for task in tasks.tasks)),
+        ]
+    )
+
+    tasks_and_blockers: DependencyGraph = (
+        prompt | llm.with_structured_output(DependencyGraph)
+    ).invoke({})
+
+    blockers_by_task = {
+        task.task_id: task for task in tasks_and_blockers.task_relationships
+    }
+
+    # Get task order and create list with task names
+    execution_order_ids = _get_non_blocked_task_order(blockers_by_task)
+    tasks_dict = {task.task_id: task for task in tasks.tasks}
+    execution_order = [tasks_dict[task_id].name for task_id in execution_order_ids]
+
+    return Command(
+        update={
+            "execution_order": execution_order,
+            "messages": [
+                ToolMessage(
+                    f"Filled in 'prompts_by_task' field:\n{tasks_and_blockers}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
+        }
+    )
+
+
+def _get_non_blocked_task_order(blockers_by_task: dict[str, TaskBlockers]) -> list[str]:
+    n = len(blockers_by_task)
+    if n == 0:
+        return []
+
+    completed = set()
+    result = []
+
+    blockers_count = {
+        task_id: len(blocks.blocking_tasks)
+        for task_id, blocks in blockers_by_task.items()
+    }
+    dependents = defaultdict(list)
+
+    for task_id, blockers in blockers_by_task.items():
+        for blocker in blockers.blocking_tasks:
+            dependents[blocker].append(task_id)
+
+    ready_queue = deque(
+        task_id for task_id in blockers_by_task if blockers_count[task_id] == 0
+    )
+    while ready_queue:
+        current_task = ready_queue.popleft()
+        completed.add(current_task)
+        result.append(current_task)
+
+        # Update all dependent tasks
+        for dependent in dependents[current_task]:
+            blockers_count[dependent] -= 1
+            if blockers_count[dependent] == 0:
+                ready_queue.append(dependent)
+
+    if len(result) != n:
+        return []  # Cycle detected
+
+    return result

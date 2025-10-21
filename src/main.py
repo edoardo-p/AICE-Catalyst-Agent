@@ -11,6 +11,7 @@ from tools import (
     classify_features_into_phase,
     create_task_acceptance_criteria,
     estimate_feature_complexity,
+    generate_execution_order,
     generate_task_prompt_for_copilot,
     generate_tasks,
     parse_requirements,
@@ -36,6 +37,7 @@ def create_project_planner_agent():
             # classify_features_into_phase, # unsure if this is really necessary; parse_requirements seems to populate the phase just fine
             create_task_acceptance_criteria,
             generate_task_prompt_for_copilot,
+            generate_execution_order,
         ],
         system_prompt=AGENT_SYSTEM_PROMPT,
         state_schema=ProjectPlanState,

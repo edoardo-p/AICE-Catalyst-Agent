@@ -135,12 +135,17 @@ class AcceptanceCriteria(BaseModel):
     )
 
 
-# class DependencyGraph(BaseModel):
-#     # task_id -> list of blocking task_ids
-#     task_relationships: Dict[str, List[str]]
-#     execution_phases: List[List[str]]  # parallel groups (topologically sorted)
-#     critical_path: List[str]
-#     suggested_order: List[str]
+class TaskBlockers(BaseModel):
+    task_id: str = Field(description="The id of the current task which is blocked.")
+    blocking_tasks: list[str] = Field(
+        description="A list of task ids associated to tasks which need to be completed before the current task.",
+    )
+
+
+class DependencyGraph(BaseModel):
+    task_relationships: list[TaskBlockers] = Field(
+        description="List of `TaskBlockers` objects.",
+    )
 
 
 class ProjectPlanState(AgentState):
@@ -154,4 +159,4 @@ class ProjectPlanState(AgentState):
     complexity_by_feature: Annotated[dict[str, ComplexityEstimate], reduce_dict]
     criteria_by_task: Annotated[dict[str, AcceptanceCriteria], reduce_dict]
     prompts_by_task: Annotated[dict[str, str], reduce_dict]
-    # dependency_graph: DependencyGraph
+    execution_order: list[str]

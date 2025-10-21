@@ -33,7 +33,7 @@ def _summarize_state(state: ProjectPlanState) -> str:
         "complexity_by_feature",
         "criteria_by_task",
         "prompts_by_task",
-        # "dependency_graph",
+        "execution_order",
     )
 
     field_status = {

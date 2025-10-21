@@ -19,37 +19,6 @@ from tools import (
 load_dotenv()
 
 
-def run_cli_agent(agent: CompiledStateGraph[ProjectPlanState]):
-    last_message_idx = 0
-    while True:
-        question = input("> ")
-        if question in ("exit", "quit", "q"):
-            break
-
-        answer = agent.invoke({"messages": [("human", question)]})
-        last_message_idx += 1
-        messages = answer["messages"][last_message_idx:]
-        print()
-        for new_message in messages:
-            if new_message.type == "ai":
-                print(new_message.type)
-                to_print = (
-                    new_message.content
-                    if new_message.content
-                    else new_message.lc_attributes
-                )
-                print(to_print)
-            elif new_message.type == "tool":
-                print(new_message.name)
-                print(new_message.content)
-            else:
-                print(new_message.type)
-                print(new_message.content)
-            last_message_idx += 1
-            print()
-        print()
-
-
 def main():
     main_model = AzureChatOpenAI(
         azure_deployment="gpt-4o-mini",
@@ -79,14 +48,11 @@ def main():
 
     graph.set_entry_point("add_reqs")
     graph.add_edge("add_reqs", "agent")
-    # graph.add_edge("agent", "present_output")
     graph.set_finish_point("present_output")
     graph.add_conditional_edges(
         "agent", should_continue, {True: "agent", False: "present_output"}
     )
     agent = graph.compile()
-
-    # run_cli_agent(catalyst_agent)
 
     with open(r"examples\\input2.txt") as f:
         question = f.read()

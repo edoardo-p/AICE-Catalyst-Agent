@@ -46,11 +46,11 @@ def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
     criteria_by_task = state.get("criteria_by_task", {})
     prompts_by_task = state.get("prompts_by_task", {})
 
-    tasks = {
+    tasks_by_id = {
         task.task_id: {
             "name": task.name,
             "description": task.description,
-            "criteria": criteria_by_task[task.task_id],
+            "criteria": criteria_by_task[task.task_id].model_dump(),
             "prompt": prompts_by_task[task.task_id],
         }
         for _, tasks in tasks_by_features.items()
@@ -65,23 +65,17 @@ def present_json_output(state: ProjectPlanState) -> dict[str, Any]:
             {
                 "name": feature.name,
                 "description": feature.description,
-                "complexity": complexity_by_feature[feature.feature_id],
+                "complexity": complexity_by_feature[feature.feature_id].model_dump(),
                 "tasks": [
-                    tasks[task.task_id]
+                    tasks_by_id[task.task_id]
                     for task in tasks_by_features[feature.feature_id].tasks
                 ],
             }
         )
 
-    # out_object = {}
-    # for phase, features in features_by_phase.items():
-    #     for feature in features:
-    #         out_object[phase] = feature
+    out_object = {
+        "raw_requirements": state["raw_requirements"],
+        "phases": features_by_phase,
+    }
 
-    # out_object = {
-    #     features: features
-    #     for phase, features in features_by_phase.items()
-    #     for feature in features
-    # }
-
-    return {"messages": [AIMessage(json.dumps(features_by_phase))]}
+    return {"messages": [AIMessage(json.dumps(out_object))]}

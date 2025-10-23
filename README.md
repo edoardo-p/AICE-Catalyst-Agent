@@ -65,7 +65,7 @@ List of implemented tools:
   BDD-style `Scenario`s and unit/integration test specs for a `Task`.
 - `generate_task_prompt_for_copilot(task)` — builds a concise prompt string that can
   be fed to a coding assistant to implement the task.
-- `generate_execution_order(tasks)` / `detect_dependencies(features, tasks)` — (production)
+- `generate_execution_order(tasks)` — (production)
   tools that infer blockers between tasks and compute a topological execution order.
 
 These tools return `Command` objects with an `update` mapping that the StateGraph

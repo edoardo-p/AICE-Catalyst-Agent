@@ -380,13 +380,12 @@ def _get_non_blocked_task_order(blockers_by_task: dict[str, TaskBlockers]) -> li
         for task_id, blocks in blockers_by_task.items()
     }
     dependents = defaultdict(list)
-
     for task_id, blockers in blockers_by_task.items():
         for blocker in blockers.blocking_tasks:
             dependents[blocker].append(task_id)
 
     ready_queue = deque(
-        task_id for task_id in blockers_by_task if blockers_count[task_id] == 0
+        task_id for task_id, num_blockers in blockers_count.items() if num_blockers
     )
     while ready_queue:
         current_task = ready_queue.popleft()
